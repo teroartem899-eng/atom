@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Квест</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;700&family=Inter:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --tv-ratio: 881 / 617;      /* пропорции картинки televuzor_1 */
+    --tv-small: 70;             /* размер ТВ в покое, % */
+    --tv-big: 96;               /* размер ТВ при просмотре, % */
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* Шрифты (подключаются в <head> через Google Fonts) */
+  :root {
+    --heading-font: 'Fraunces', Georgia, serif;
+    --body-font: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  .heading { font-family: var(--heading-font); }
+  .body-text { font-family: var(--body-font); }
+
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #000; color: #fff;
+    font-family: var(--body-font);
+  }
+  button { font-family: var(--body-font); }
+
+  /* Фон fon_1, затемнён на 25% */
+  .bg {
+    position: fixed; inset: 0; z-index: 0;
+    background:
+      linear-gradient(rgba(0,0,0,.25), rgba(0,0,0,.25)),
+      url("fon_1.jpg") center / cover no-repeat #111;
+  }
+
+  .scene {
+    position: fixed; inset: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: center;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right)
+             env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* Телевизор */
+  .tv {
+    position: relative;
+    aspect-ratio: var(--tv-ratio);
+    width: min(calc(var(--tv-small) * 1vw), calc(var(--tv-small) * 1dvh * 881 / 617));
+    cursor: pointer;
+    transition: width .6s cubic-bezier(.2,.8,.2,1), filter .3s;
+    filter: drop-shadow(0 20px 40px rgba(0,0,0,.6));
+  }
+  .tv:not(.open):hover { filter: drop-shadow(0 20px 40px rgba(0,0,0,.6)) brightness(1.15); }
+  .tv.open {
+    width: min(calc(var(--tv-big) * 1vw), calc(var(--tv-big) * 1dvh * 881 / 617));
+    cursor: default;
+  }
+  .tv img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    image-rendering: pixelated; user-select: none; -webkit-user-drag: none;
+    pointer-events: none;
+  }
+
+  /* Область зелёного экрана (в % от картинки) */
+  .screen {
+    position: absolute;
+    left: 7.5%; top: 17.8%; width: 60%; height: 64.3%;
+    background: #000; overflow: hidden;
+    opacity: 0; transition: opacity .4s .3s;
+  }
+  .tv.open .screen { opacity: 1; }
+  video {
+    width: 100%; height: 100%;
+    object-fit: contain;      /* видео 3:2 не обрезается */
+    background: #000; display: block;
+  }
+
+  /* Подсказка */
+  .hint {
+    position: absolute; left: 0; right: 0; bottom: -2.2em;
+    text-align: center; font-size: clamp(13px, 2.2vw, 18px);
+    font-family: var(--heading-font); font-weight: 700;
+    letter-spacing: .08em; color: #fff;
+    text-shadow: 0 2px 8px #000, 0 0 2px #000;
+    animation: pulse 1.6s infinite; pointer-events: none;
+  }
+  .tv.open .hint { display: none; }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  /* Кнопки */
+  .btns {
+    position: fixed; top: calc(10px + env(safe-area-inset-top)); right: calc(10px + env(safe-area-inset-right));
+    z-index: 5; display: none; gap: 8px;
+  }
+  body.watching .btns { display: flex; }
+  .btns button {
+    width: 44px; height: 44px; border-radius: 10px; border: 1px solid #fff4;
+    background: #000a; color: #fff; font-size: 20px; cursor: pointer;
+  }
+  .btns button:active { background: #333; }
+
+  /* Сообщения (ошибка / повтор) */
+  .msg {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    text-align: center; padding: 1em; background: #000c; font-size: clamp(12px, 2.4vw, 20px);
+  }
+  .msg.show { display: flex; }
+  .msg button {
+    margin-top: .8em; padding: .6em 1.2em; font: inherit; color: #fff;
+    background: #2f4f4a; border: 1px solid #fff5; border-radius: 8px; cursor: pointer;
+  }
+  .tv .loader {
+    position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    font-size: clamp(12px, 2.4vw, 20px); pointer-events: none;
+  }
+  .tv .loader.show { display: flex; animation: pulse 1s infinite; }
+</style>
+</head>
+<body>
+<div class="bg"></div>
+
+<div class="scene">
+  <div class="tv" id="tv" role="button" tabindex="0" aria-label="Включить телевизор">
+    <img src="televuzor_1.png" alt="Телевизор" draggable="false">
+    <div class="screen" id="screen">
+      <video id="video" src="video_1.mp4" preload="auto" playsinline webkit-playsinline></video>
+      <div class="loader" id="loader">загрузка…</div>
+      <div class="msg" id="msg"><div><div id="msgText"></div><button id="msgBtn">Ещё раз</button></div></div>
+    </div>
+    <div class="hint">▶ НАЖМИ НА ТЕЛЕВИЗОР</div>
+  </div>
+</div>
+
+<div class="btns">
+  <button id="fsBtn" title="Полный экран" aria-label="Полный экран">⛶</button>
+  <button id="closeBtn" title="Закрыть" aria-label="Закрыть">✕</button>
+</div>
+
+<script>
+(() => {
+  const tv = document.getElementById('tv');
+  const video = document.getElementById('video');
+  const loader = document.getElementById('loader');
+  const msg = document.getElementById('msg');
+  const msgText = document.getElementById('msgText');
+  const msgBtn = document.getElementById('msgBtn');
+  const fsBtn = document.getElementById('fsBtn');
+  const closeBtn = document.getElementById('closeBtn');
+
+  const showMsg = (t, b) => { msgText.textContent = t; msgBtn.textContent = b; msg.classList.add('show'); };
+
+  function open() {
+    if (tv.classList.contains('open')) return;
+    tv.classList.add('open');
+    document.body.classList.add('watching');
+    msg.classList.remove('show');
+    video.muted = false; video.volume = 1;
+    // play() вызывается прямо из клика — так звук разрешён и на iOS, и на Android
+    const p = video.play();
+    if (p) p.catch(() => showMsg('Нажми, чтобы запустить видео со звуком', '▶ Play'));
+  }
+  function close() {
+    video.pause();
+    tv.classList.remove('open');
+    document.body.classList.remove('watching');
+    if (document.fullscreenElement) document.exitFullscreen();
+  }
+
+  tv.addEventListener('click', e => { if (!tv.classList.contains('open')) open(); });
+  tv.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } });
+  closeBtn.addEventListener('click', close);
+
+  // Тап по видео — пауза / продолжить
+  video.addEventListener('click', () => { video.paused ? video.play() : video.pause(); });
+
+  msgBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    msg.classList.remove('show');
+    if (video.error) video.load();
+    video.currentTime = video.ended ? 0 : video.currentTime;
+    video.play().catch(() => {});
+  });
+
+  // Состояния загрузки / конец / ошибка
+  video.addEventListener('waiting', () => loader.classList.add('show'));
+  ['playing', 'canplay'].forEach(ev => video.addEventListener(ev, () => loader.classList.remove('show')));
+  video.addEventListener('ended', () => showMsg('Конец записи', '↻ Смотреть снова'));
+  video.addEventListener('error', () => showMsg('Не удалось загрузить видео. Проверь интернет.', '↻ Повторить'));
+
+  // Полный экран (по желанию, особенно удобно на телефоне в горизонтали)
+  fsBtn.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) { await document.exitFullscreen(); return; }
+      if (tv.requestFullscreen) {
+        await tv.requestFullscreen();
+        if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+      } else if (video.webkitEnterFullscreen) {   // iPhone Safari
+        video.webkitEnterFullscreen();
+      }
+    } catch (_) {}
+  });
+
+  // Если вкладку свернули — ставим на паузу
+  document.addEventListener('visibilitychange', () => { if (document.hidden) video.pause(); });
+})();
+</script>
+</body>
+</html>
